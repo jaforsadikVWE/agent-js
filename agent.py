@@ -13,6 +13,7 @@ import os
 import sys
 import json
 import argparse
+import subprocess
 import traceback
 
 from rich.console import Console
@@ -27,6 +28,72 @@ from tools import TOOL_SCHEMAS, execute_tool, get_tool_risk
 # ─── Globals ─────────────────────────────────────────────────
 console = Console()
 auto_approve = False
+voice_mode = False
+
+
+# ═══════════════════════════════════════════════════════════════
+#  VOICE MODE
+# ═══════════════════════════════════════════════════════════════
+
+def voice_listen() -> str:
+    """Listen for voice input using termux-speech-to-text."""
+    console.print("[bold magenta]🎤 Listening...[/] (speak now)")
+    try:
+        result = subprocess.run(
+            ["termux-speech-to-text"],
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+        if result.returncode != 0:
+            console.print(f"[red]Speech recognition error: {result.stderr.strip()}[/]")
+            return ""
+        text = result.stdout.strip()
+        if text:
+            console.print(f"[green]Heard:[/] {text}")
+        else:
+            console.print("[dim]No speech detected. Try again.[/]")
+        return text
+    except FileNotFoundError:
+        console.print(
+            "[bold red]Error:[/] termux-speech-to-text not found.\n"
+            "Install: [cyan]pkg install termux-api[/]\n"
+            "Also install the Termux:API app from F-Droid."
+        )
+        return ""
+    except subprocess.TimeoutExpired:
+        console.print("[dim]Listening timed out (30s). Try again.[/]")
+        return ""
+    except Exception as e:
+        console.print(f"[red]Voice input error: {e}[/]")
+        return ""
+
+
+def voice_speak(text: str):
+    """Speak text aloud using termux-tts-speak."""
+    if not voice_mode or not text:
+        return
+    # Strip markdown formatting for cleaner speech
+    import re
+    clean = re.sub(r'[*_`#\[\]\(\)>~]', '', text)
+    clean = re.sub(r'\n{2,}', '. ', clean)
+    clean = clean.strip()
+    if not clean:
+        return
+    try:
+        console.print("[dim magenta]🔊 Speaking...[/]")
+        subprocess.run(
+            ["termux-tts-speak"],
+            input=clean,
+            text=True,
+            timeout=120,
+        )
+    except FileNotFoundError:
+        console.print("[dim]TTS not available. Install: pkg install termux-api[/]")
+    except subprocess.TimeoutExpired:
+        pass
+    except Exception:
+        pass
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -220,7 +287,7 @@ def _get_tc_field(tc, *keys):
 
 def chat_loop(client, model: str, single_prompt: str = None):
     """Main interactive chat loop."""
-    global auto_approve
+    global auto_approve, voice_mode
     messages = [{"role": "system", "content": SYSTEM_PROMPT}]
 
     if single_prompt:
@@ -234,7 +301,12 @@ def chat_loop(client, model: str, single_prompt: str = None):
     while True:
         try:
             console.print()
-            user_input = console.input("[bold green]You ❯ [/]").strip()
+            if voice_mode:
+                user_input = voice_listen()
+                if not user_input:
+                    continue
+            else:
+                user_input = console.input("[bold green]You ❯ [/]").strip()
         except (EOFError, KeyboardInterrupt):
             console.print("\n[dim]Goodbye! 👋[/]")
             break
@@ -268,6 +340,11 @@ def chat_loop(client, model: str, single_prompt: str = None):
                 auto_approve = not auto_approve
                 state = "ON" if auto_approve else "OFF"
                 console.print(f"[dim]Auto-approve is now {state}[/]")
+                continue
+            elif cmd == "/voice":
+                voice_mode = not voice_mode
+                state = "ON 🎤" if voice_mode else "OFF"
+                console.print(f"[dim]Voice mode is now {state}[/]")
                 continue
             else:
                 console.print(f"[dim]Unknown command: {cmd}. Type /help for commands.[/]")
@@ -306,6 +383,8 @@ def handle_user_message(client, model: str, messages: list, user_input: str):
                 border_style="blue",
                 padding=(1, 2),
             ))
+            # Speak the response in voice mode
+            voice_speak(final_text)
 
     except KeyboardInterrupt:
         console.print("\n[dim]Interrupted.[/]")
@@ -331,11 +410,13 @@ def trim_history(messages: list):
 
 def print_welcome(model: str):
     """Print the welcome banner."""
+    voice_str = "[green]ON 🎤[/]" if voice_mode else "[dim]OFF[/]"
     console.print()
     console.print(Panel(
         "[bold cyan]🚀 CLI AI Agent[/]\n\n"
         f"Model: [green]{model}[/]\n"
-        f"Tools: [green]{len(TOOL_SCHEMAS)} available[/]\n\n"
+        f"Tools: [green]{len(TOOL_SCHEMAS)} available[/]\n"
+        f"Voice: {voice_str}\n\n"
         "[dim]Type your request and the agent will use tools to help you.\n"
         "Type /help for commands, /tools to see available tools.[/]",
         border_style="cyan",
@@ -353,6 +434,7 @@ def print_help():
         "  [cyan]/history[/]  — Show conversation history summary\n"
         "  [cyan]/clear[/]    — Clear conversation history\n"
         "  [cyan]/yolo[/]     — Toggle auto-approve for tool calls\n"
+        "  [cyan]/voice[/]    — Toggle voice mode (speak & listen)\n"
         "  [cyan]/exit[/]     — Exit the agent\n",
         title="Help",
         border_style="cyan",
@@ -406,10 +488,16 @@ def main():
         action="store_true",
         help="Auto-approve all tool calls (no confirmation prompts)",
     )
+    parser.add_argument(
+        "--voice", "-v",
+        action="store_true",
+        help="Enable voice mode (speech-to-text input, TTS output)",
+    )
     args = parser.parse_args()
 
-    global auto_approve
+    global auto_approve, voice_mode
     auto_approve = args.yolo
+    voice_mode = args.voice
 
     client = create_client()
     chat_loop(client, args.model, single_prompt=args.prompt)

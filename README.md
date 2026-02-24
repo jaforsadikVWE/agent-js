@@ -1,6 +1,6 @@
 # 🚀 CLI AI Agent for Termux
 
-A powerful command-line AI agent that uses the Ollama cloud API with tool-calling capabilities. It can execute shell commands, read/write files, search the web, manage packages, control your Android device via Termux API, and more — all through natural language.
+A powerful command-line AI agent that uses the Ollama cloud API with tool-calling capabilities. It can execute shell commands, read/write files, search the web, manage packages, control your Android device via Termux API, and even work in **voice mode** — all through natural language.
 
 ## Setup (Termux)
 
@@ -24,7 +24,11 @@ Get an API key from [ollama.com](https://ollama.com), then:
 export OLLAMA_API_KEY=your_api_key_here
 ```
 
-To make it permanent, add the line above to your `~/.bashrc` or `~/.zshrc`.
+To make it permanent:
+```bash
+echo 'export OLLAMA_API_KEY=your_key_here' >> ~/.bashrc
+source ~/.bashrc
+```
 
 ### 5. (Optional) Install globally
 ```bash
@@ -33,7 +37,7 @@ bash setup.sh
 This creates an `ai` command you can use from anywhere.
 
 ### 6. (Optional) Install Termux API
-For Android-specific features (notifications, SMS, camera, etc.):
+For Android-specific features + voice mode:
 ```bash
 pkg install termux-api
 ```
@@ -46,25 +50,32 @@ python agent.py        # or just: ai
 
 ## Usage
 
-### Interactive mode
 ```bash
-ai
+ai                              # interactive mode
+ai "list all .py files here"    # single-shot mode
+ai --yolo                       # auto-approve moderate tools
+ai --voice                      # voice mode (speak & listen)
+ai --voice --yolo               # voice + auto-approve
+ai --model gpt-oss:120b-cloud   # different model
 ```
 
-### Single-shot mode
+## 🎤 Voice Mode
+
+Talk to the agent with your voice and hear responses spoken aloud.
+
 ```bash
-ai "list all Python files in the current directory"
+ai --voice          # or: ai -v
 ```
 
-### Auto-approve moderate tool calls
-```bash
-ai --yolo
-```
+**How it works:**
+1. 🎤 Listens via `termux-speech-to-text` (Google speech recognition)
+2. Shows what it heard so you can verify
+3. Agent processes your request (uses tools etc.)
+4. 🔊 Speaks the response via `termux-tts-speak`
 
-### Use a different model
-```bash
-ai --model gpt-oss:120b-cloud
-```
+**Toggle mid-session:** Type `/voice` to switch on/off anytime.
+
+**Requires:** `pkg install termux-api` + Termux:API app from F-Droid.
 
 ## Slash Commands
 
@@ -76,6 +87,7 @@ ai --model gpt-oss:120b-cloud
 | `/history` | Show conversation history summary    |
 | `/clear`   | Clear conversation history           |
 | `/yolo`    | Toggle auto-approve for tool calls   |
+| `/voice`   | Toggle voice mode (speak & listen)   |
 | `/exit`    | Exit the agent                       |
 
 ## Available Tools (29 total)
@@ -133,7 +145,7 @@ ai --model gpt-oss:120b-cloud
 | `termux_contact_list`  | safe      | List device contacts               |
 | `termux_download`      | moderate  | Download files                     |
 
-## Risk-Based Approval System
+## 🛡️ Risk-Based Approval System
 
 | Risk Level  | Normal Mode        | `--yolo` Mode       |
 |-------------|--------------------|--------------------|
