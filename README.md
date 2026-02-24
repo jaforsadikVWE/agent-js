@@ -1,6 +1,6 @@
 # 🚀 CLI AI Agent for Termux
 
-A powerful command-line AI agent that uses the Ollama cloud API with tool-calling capabilities. It can execute shell commands, read/write files, search your filesystem, fetch URLs, run Python code, and more — all through natural language.
+A powerful command-line AI agent that uses the Ollama cloud API with tool-calling capabilities. It can execute shell commands, read/write files, search the web, manage packages, control your Android device via Termux API, and more — all through natural language.
 
 ## Setup (Termux)
 
@@ -11,7 +11,7 @@ pkg install python
 ```
 
 ### 2. Clone / copy the files
-Put `agent.py`, `tools.py`, `config.py`, and `requirements.txt` in a folder.
+Put all `.py` files, `requirements.txt`, and `setup.sh` in a folder.
 
 ### 3. Install dependencies
 ```bash
@@ -26,31 +26,44 @@ export OLLAMA_API_KEY=your_api_key_here
 
 To make it permanent, add the line above to your `~/.bashrc` or `~/.zshrc`.
 
-### 5. Run the agent
+### 5. (Optional) Install globally
 ```bash
-python agent.py
+bash setup.sh
+```
+This creates an `ai` command you can use from anywhere.
+
+### 6. (Optional) Install Termux API
+For Android-specific features (notifications, SMS, camera, etc.):
+```bash
+pkg install termux-api
+```
+Also install the **Termux:API** app from F-Droid.
+
+### 7. Run the agent
+```bash
+python agent.py        # or just: ai
 ```
 
 ## Usage
 
 ### Interactive mode
 ```bash
-python agent.py
+ai
 ```
 
 ### Single-shot mode
 ```bash
-python agent.py "list all Python files in the current directory"
+ai "list all Python files in the current directory"
 ```
 
-### Auto-approve tool calls
+### Auto-approve moderate tool calls
 ```bash
-python agent.py --yolo
+ai --yolo
 ```
 
 ### Use a different model
 ```bash
-python agent.py --model gpt-oss:120b-cloud
+ai --model gpt-oss:120b-cloud
 ```
 
 ## Slash Commands
@@ -65,20 +78,70 @@ python agent.py --model gpt-oss:120b-cloud
 | `/yolo`    | Toggle auto-approve for tool calls   |
 | `/exit`    | Exit the agent                       |
 
-## Available Tools
+## Available Tools (29 total)
 
-| Tool              | Description                                    |
-|-------------------|------------------------------------------------|
-| `run_command`     | Execute shell commands with timeout            |
-| `read_file`       | Read file contents (supports line ranges)      |
-| `write_file`      | Create or overwrite files                      |
-| `append_file`     | Append content to files                        |
-| `list_directory`  | List files and directories                     |
-| `search_files`    | Search files by name pattern (glob)            |
-| `search_in_files` | Grep-like text search inside files             |
-| `get_system_info` | Get OS, memory, disk, Python version info      |
-| `fetch_url`       | HTTP GET requests for web content/APIs         |
-| `python_exec`     | Execute Python code snippets                   |
+### Core (10 tools)
+| Tool              | Risk     | Description                              |
+|-------------------|----------|------------------------------------------|
+| `run_command`     | moderate | Execute shell commands                   |
+| `read_file`       | safe     | Read file contents (line ranges)         |
+| `write_file`      | moderate | Create or overwrite files                |
+| `append_file`     | moderate | Append content to files                  |
+| `list_directory`  | safe     | List files and directories               |
+| `search_files`    | safe     | Search files by name (glob)              |
+| `search_in_files` | safe     | Grep-like text search in files           |
+| `get_system_info` | safe     | OS, memory, disk, Python version         |
+| `fetch_url`       | safe     | HTTP GET for web content/APIs            |
+| `python_exec`     | moderate | Execute Python code snippets             |
+
+### Web & Package Management (6 tools)
+| Tool              | Risk      | Description                             |
+|-------------------|-----------|-----------------------------------------|
+| `web_search`      | safe      | Search the web (DuckDuckGo)             |
+| `pkg_install`     | dangerous | Install system packages                 |
+| `pkg_uninstall`   | dangerous | Uninstall system packages               |
+| `pkg_list`        | safe      | List installed system packages          |
+| `pip_install`     | moderate  | Install Python packages                 |
+| `pip_list`        | safe      | List installed Python packages          |
+
+### File Management (3 tools)
+| Tool              | Risk      | Description                             |
+|-------------------|-----------|-----------------------------------------|
+| `delete_file`     | dangerous | Delete files or directories             |
+| `move_file`       | moderate  | Move or rename files                    |
+| `copy_file`       | moderate  | Copy files or directories               |
+
+### Termux API (15 tools)
+| Tool                   | Risk      | Description                        |
+|------------------------|-----------|------------------------------------|
+| `termux_notification`  | moderate  | Show Android notifications         |
+| `termux_vibrate`       | safe      | Vibrate the device                 |
+| `termux_torch`         | safe      | Toggle flashlight                  |
+| `termux_battery`       | safe      | Get battery status                 |
+| `termux_clipboard_get` | safe      | Read clipboard                     |
+| `termux_clipboard_set` | moderate  | Set clipboard content              |
+| `termux_tts`           | moderate  | Text-to-speech                     |
+| `termux_sms_send`      | dangerous | Send SMS messages                  |
+| `termux_sms_list`      | moderate  | Read SMS inbox                     |
+| `termux_camera_photo`  | moderate  | Take photos                        |
+| `termux_location`      | moderate  | Get GPS location                   |
+| `termux_share`         | moderate  | Share via Android intent           |
+| `termux_toast`         | safe      | Show toast messages                |
+| `termux_wifi_info`     | safe      | Get WiFi connection info           |
+| `termux_open_url`      | moderate  | Open URL in browser                |
+| `termux_volume`        | moderate  | Get/set volume levels              |
+| `termux_contact_list`  | safe      | List device contacts               |
+| `termux_download`      | moderate  | Download files                     |
+
+## Risk-Based Approval System
+
+| Risk Level  | Normal Mode        | `--yolo` Mode       |
+|-------------|--------------------|--------------------|
+| 🟢 **safe**      | Auto-approved      | Auto-approved      |
+| 🟡 **moderate**  | Asks confirmation  | Auto-approved      |
+| 🔴 **dangerous** | Asks confirmation  | **Still asks!**    |
+
+Dangerous tools (delete files, install/uninstall packages, send SMS) **always** require your explicit approval, even with `--yolo`.
 
 ## Environment Variables
 
@@ -91,11 +154,17 @@ python agent.py --model gpt-oss:120b-cloud
 ## Examples
 
 ```
-You ❯ Create a script that downloads a webpage and counts the words
+You ❯ Search the web for "best Python libraries for data analysis"
 
-You ❯ What's my disk usage and available memory?
+You ❯ Send a notification saying "Task complete!"
 
-You ❯ Find all .json files in my home directory larger than 1MB
+You ❯ What's my battery level and WiFi connection?
 
-You ❯ Install the requests library and test it by fetching example.com
+You ❯ Install ffmpeg and convert video.mp4 to audio
+
+You ❯ Take a photo with the front camera
+
+You ❯ Read my last 5 SMS messages
+
+You ❯ Find all files larger than 10MB in my home directory
 ```

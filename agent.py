@@ -22,7 +22,7 @@ from rich.text import Text
 from rich.live import Live
 
 from config import MODEL, API_HOST, API_KEY_ENV, SYSTEM_PROMPT, MAX_HISTORY, MAX_TOOL_ITERATIONS
-from tools import TOOL_SCHEMAS, execute_tool
+from tools import TOOL_SCHEMAS, execute_tool, get_tool_risk
 
 # ─── Globals ─────────────────────────────────────────────────
 console = Console()
@@ -64,18 +64,35 @@ def create_client():
 # ═══════════════════════════════════════════════════════════════
 
 def confirm_tool_call(name: str, args: dict) -> bool:
-    """Ask the user to confirm a tool call. Returns True if approved."""
+    """Decide whether to run a tool based on risk level.
+
+    Risk levels:
+      safe      → always auto-approved (read-only, no side effects)
+      moderate  → auto-approved in --yolo mode, confirmed otherwise
+      dangerous → ALWAYS asks for confirmation, even in --yolo mode
+    """
     global auto_approve
-    if auto_approve:
+    risk = get_tool_risk(name)
+
+    # Safe tools always run
+    if risk == "safe":
         return True
+
+    # In yolo mode, moderate tools auto-approve; dangerous still asks
+    if auto_approve and risk == "moderate":
+        return True
+
+    # Show the confirmation panel
+    risk_color = {"moderate": "yellow", "dangerous": "red bold"}.get(risk, "yellow")
+    risk_label = f"[{risk_color}]{risk.upper()}[/{risk_color}]"
 
     console.print()
     console.print(
         Panel(
-            f"[bold cyan]Tool:[/] {name}\n"
+            f"[bold cyan]Tool:[/] {name}  ({risk_label})\n"
             f"[bold cyan]Args:[/] {json.dumps(args, indent=2, ensure_ascii=False)}",
             title="🔧 Tool Call",
-            border_style="yellow",
+            border_style="red" if risk == "dangerous" else "yellow",
         )
     )
 
